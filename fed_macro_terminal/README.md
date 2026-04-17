@@ -9,14 +9,14 @@ Live demo: https://vjanrikard.github.io/fed_macro_terminal/
 FRED API støtter ikke CORS fra nettlesere — direkte kall fra frontend blokkeres alltid. Løsningen er en **snapshot-strategi**:
 
 ```
-GitHub Actions – deploy.yml (hver time)
-  → fetch_snapshot.py henter alle serier server-side
-  → lagrer data/fred_snapshot.json
-  → committer tilbake til main
+GitHub Actions – update-snapshot.yml (hver time)
+  → scripts/build-snapshot.js henter alle 26 serier server-side
+  → lagrer data/fred_snapshot.json og fed_macro_terminal/data/fred_snapshot.json
+  → committer tilbake til main (trigger deploy automatisk)
 
-GitHub Actions – pages-deploy.yml (ved push til main)
+GitHub Actions – deploy.yml (ved push til main)
   → injiserer FRED_API_KEY i index.html fra index.template.html
-  → deployer til gh-pages
+  → deployer fed_macro_terminal/ til gh-pages
 
 Browser
   → laster data/fred_snapshot.json (same-origin, ingen CORS-begrensning) ✓
@@ -47,13 +47,13 @@ git push
 ```
 
 Etter push:
-- `pages-deploy.yml` bygger og deployer `index.html` til `gh-pages`
-- `deploy.yml` kjører hvert time og oppdaterer snapshotdata
+- `deploy.yml` bygger og deployer `index.html` til `gh-pages`
+- `update-snapshot.yml` kjøres hvert time og oppdaterer snapshotdata
 
 ### 5. Sjekk GitHub Actions og Pages
 
 1. Gå til repoet → fanen `Actions`
-2. Se etter `Build and Deploy Pages` — vent til den er grønn
+2. Se etter `Build and Deploy to GitHub Pages` — vent til den er grønn
 3. Bekreft under Settings → Pages at siden publiseres fra `gh-pages`
 
 Siden er tilgjengelig på:
@@ -80,14 +80,20 @@ npm start
 
 `server.js` proxyer FRED API server-side, slik at lokal utvikling fungerer uten snapshotfil.
 
+For å regenerere snapshot manuelt lokalt:
+
+```bash
+FRED_API_KEY=<din-nøkkel> node scripts/build-snapshot.js
+```
+
 ## Datafiler
 
 | Fil | Beskrivelse |
 |---|---|
 | `index.template.html` | Kildekode — API-nøkkel er erstatningsvariabel `__FRED_API_KEY__` |
 | `index.html` | Bygget av GitHub Actions — ikke rediger direkte |
-| `fetch_snapshot.py` | Henter alle FRED-serier og skriver `data/fred_snapshot.json` |
-| `data/fred_snapshot.json` | Oppdateres automatisk hvert time |
+| `scripts/build-snapshot.js` | Henter alle 26 FRED-serier og skriver snapshot til begge `data/`-mapper |
+| `data/fred_snapshot.json` | Oppdateres automatisk hvert time av GitHub Actions |
 
 ## Datakilder
 
@@ -100,13 +106,15 @@ Alle data fra FRED API — Federal Reserve Bank of St. Louis. Snapshot oppdatere
 | PCE / Core PCE | PCEPI / PCEPILFE | Månedlig |
 | Nonfarm Payrolls | PAYEMS | Månedlig |
 | Arbeidsledighet | UNRATE | Månedlig |
+| Arbeidsmarkedsdeltakelse | CIVPART | Månedlig |
+| JOLTS Job Openings | JTSJOL | Månedlig |
 | Real GDP | GDPC1 | Kvartalsvis |
 | Industriproduksjon | INDPRO | Månedlig |
-| Treasury Yields (1M–30Y) | DGS1MO–DGS30 | Daglig |
+| Detaljhandel | RSAFS | Månedlig |
+| Boligbygging | HOUST | Månedlig |
+| Treasury Yields (1M–30Y) | DGS1MO, DGS3MO, DGS6MO, DGS1, DGS2, DGS5, DGS7, DGS10, DGS20, DGS30 | Daglig |
 | 2Y-10Y Yield Spread | T10Y2Y | Daglig |
 | HY Credit Spreads | BAMLH0A0HYM2 | Daglig |
+| National Financial Conditions | NFCI | Ukentlig |
 | Fed Balance Sheet | WALCL | Ukentlig |
 | M2 Money Supply | M2SL | Ukentlig |
-| JOLTS Job Openings | JTSJOL | Månedlig |
-| Arbeidsmarkedsdeltakelse | CIVPART | Månedlig |
-| National Financial Conditions | NFCI | Ukentlig |
