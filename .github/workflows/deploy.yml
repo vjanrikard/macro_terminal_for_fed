@@ -1,0 +1,30 @@
+name: Build and Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Inject API key
+        run: |
+          python3 -c "
+          key = '${{ secrets.FRED_API_KEY }}'
+          content = open('index.template.html').read()
+          content = content.replace('__FRED_API_KEY__', key)
+          open('index.html', 'w').write(content)
+          print('Done: index.html built')
+          "
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./
+          publish_branch: gh-pages
+          exclude_assets: '.env,.env.example,index.template.html,build.sh,.github'

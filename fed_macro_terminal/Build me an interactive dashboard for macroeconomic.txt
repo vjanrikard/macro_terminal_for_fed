@@ -1,0 +1,4 @@
+Build me an interactive dashboard to visualize key macroeconomic data from FRED with explanations for changes and the current state. Think about all the major indicators that Jerome Powell would care about and package those into the dashboard. Format it like a terminal with tabs that I can flip between.
+
+Get inspiration from : https://www.perplexity.ai/computer/a/macro-terminal-mdwCDLA0SNukya_bpSHPTw?view=split&login-source=sharedThreadLoginGate&login-new=false
+

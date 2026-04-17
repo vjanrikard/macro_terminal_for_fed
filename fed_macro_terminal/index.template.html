@@ -1,0 +1,918 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FED MACRO TERMINAL — Live FRED Data Dashboard</title>
+<meta name="description" content="Interactive macroeconomic dashboard tracking key Federal Reserve indicators via live FRED data. Inflation, labor, growth, rates, financial conditions.">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&family=IBM+Plex+Mono:wght@300;400;500&display=swap');
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --t-bg:#0a0e13;--t-surface:#0f1419;--t-surface2:#141a21;
+    --t-border:#1e2a35;--t-border2:#243040;
+    --t-green:#00d46a;--t-green-dim:rgba(0,212,106,.12);
+    --t-amber:#f5a623;--t-amber-dim:rgba(245,166,35,.12);
+    --t-red:#ff4a4a;--t-red-dim:rgba(255,74,74,.12);
+    --t-blue:#4db8ff;--t-blue-dim:rgba(77,184,255,.1);
+    --t-purple:#b57bff;--t-purple-dim:rgba(181,123,255,.1);
+    --t-cyan:#00e5cc;--t-cyan-dim:rgba(0,229,204,.1);
+    --t-text:#eaf2ff;--t-muted:#8bb4cc;--t-dim:#5a7a94;
+    font-family:'JetBrains Mono','IBM Plex Mono','Courier New',monospace;
+  }
+
+  html,body{height:100%;background:var(--t-bg);color:var(--t-text);font-size:13px;line-height:1.5}
+
+  /* SCANLINE EFFECT */
+  body::before{content:'';position:fixed;top:0;left:0;width:100%;height:100%;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.03) 2px,rgba(0,0,0,.03) 4px);pointer-events:none;z-index:9999}
+
+  #app{max-width:1400px;margin:0 auto;padding:16px;min-height:100vh}
+
+  /* TERMINAL SHELL */
+  #terminal{width:100%;background:var(--t-bg);border:1px solid var(--t-border2);border-radius:10px;overflow:hidden;box-shadow:0 0 0 1px rgba(77,184,255,.05),0 20px 60px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.03)}
+
+  /* TITLE BAR */
+  .term-header{background:var(--t-surface);border-bottom:1px solid var(--t-border2);padding:10px 20px;display:flex;align-items:center;gap:12px;user-select:none}
+  .term-dots{display:flex;gap:7px}
+  .term-dot{width:13px;height:13px;border-radius:50%}
+  .dot-r{background:#ff5f57}.dot-y{background:#febc2e}.dot-g{background:#28c840}
+  .term-title{flex:1;text-align:center;font-size:11px;color:var(--t-muted);letter-spacing:.12em;text-transform:uppercase}
+  .term-title span{color:var(--t-blue)}
+  .term-time{font-size:10px;color:var(--t-muted);letter-spacing:.05em}
+
+  /* TABS */
+  .tabs{display:flex;background:var(--t-surface);border-bottom:1px solid var(--t-border2);overflow-x:auto;scrollbar-width:none;gap:0}
+  .tabs::-webkit-scrollbar{display:none}
+  .tab{padding:9px 18px;font-size:10px;color:var(--t-text);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;letter-spacing:.1em;text-transform:uppercase;transition:color .15s,background .15s;position:relative;font-family:inherit}
+  .tab:hover{color:var(--t-text);background:rgba(255,255,255,.02)}
+  .tab.active{color:var(--t-blue);border-bottom-color:var(--t-blue);background:rgba(77,184,255,.04)}
+  .tab-icon{margin-right:6px;opacity:.7}
+
+  /* CONTENT */
+  .content{padding:20px;min-height:560px;background:var(--t-bg)}
+
+  .panel{display:none}
+  .panel.active{display:block}
+
+  .section-head{font-size:10px;color:var(--t-muted);letter-spacing:.15em;text-transform:uppercase;margin-bottom:16px;padding-bottom:8px;border-bottom:1px solid var(--t-border);display:flex;align-items:center;gap:8px}
+  .section-head::before{content:'//';color:var(--t-green);font-weight:600}
+
+  /* KPI GRID */
+  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
+  .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
+  .grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+
+  @media(max-width:900px){.grid-4{grid-template-columns:repeat(2,1fr)}.grid-3{grid-template-columns:repeat(2,1fr)}.grid-2{grid-template-columns:1fr}}
+
+  .kpi{background:var(--t-surface);border:1px solid var(--t-border);border-radius:6px;padding:14px;position:relative;overflow:hidden;transition:border-color .2s}
+  .kpi:hover{border-color:var(--t-border2)}
+  .kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(77,184,255,.2),transparent)}
+  .kpi-label{font-size:9px;color:var(--t-muted);letter-spacing:.12em;text-transform:uppercase;margin-bottom:8px}
+  .kpi-val{font-size:24px;font-weight:500;color:var(--t-text);margin-bottom:4px;letter-spacing:-.02em}
+  .kpi-change{font-size:10px;margin-bottom:2px}
+  .kpi-sub{font-size:9px;color:var(--t-muted);letter-spacing:.04em}
+  .up{color:var(--t-green)}.down{color:var(--t-red)}.neu{color:var(--t-muted)}
+
+  /* CHART WRAP */
+  .chart-wrap{background:var(--t-surface);border:1px solid var(--t-border);border-radius:6px;padding:16px;margin-bottom:14px}
+  .chart-title{font-size:9px;color:var(--t-text);margin-bottom:12px;letter-spacing:.12em;text-transform:uppercase;display:flex;align-items:center;gap:6px}
+  .chart-title::before{content:'▸';color:var(--t-blue);font-size:10px}
+
+  /* LOADING */
+  .loading{color:var(--t-muted);font-size:11px;padding:40px;text-align:center;letter-spacing:.05em}
+  .loading::before{content:'> ';color:var(--t-green)}
+  .blink{animation:blink 1s step-end infinite}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+
+  /* ANALYSIS BOX */
+  .analysis-box{background:var(--t-surface);border:1px solid var(--t-border);border-left:2px solid var(--t-blue);border-radius:4px;padding:14px 16px;margin-bottom:14px;font-size:12px;line-height:1.8;color:var(--t-text)}
+  .analysis-box .alabel{font-size:9px;color:var(--t-blue);letter-spacing:.12em;text-transform:uppercase;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+  .analysis-box .alabel::before{content:'//';font-weight:600}
+
+  /* STATUS BAR */
+  .status-bar{background:var(--t-surface);border-top:1px solid var(--t-border2);padding:7px 20px;font-size:9px;color:var(--t-muted);display:flex;justify-content:space-between;align-items:center;letter-spacing:.06em}
+  .prompt-text{color:var(--t-green)}
+
+  /* CURSOR */
+  .cursor{display:inline-block;width:7px;height:12px;background:var(--t-blue);animation:blink 1s step-end infinite;vertical-align:middle;margin-left:3px;border-radius:1px}
+
+  /* YIELD TABLE */
+  .yield-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--t-border);font-size:11px}
+  .yield-row:last-child{border-bottom:none}
+  .yield-label{color:var(--t-text);width:35px}
+  .yield-bar-wrap{flex:1;margin:0 10px;height:4px;background:var(--t-border);border-radius:2px;overflow:hidden}
+  .yield-bar{height:100%;border-radius:2px;background:var(--t-blue);transition:width .5s}
+  .yield-val{color:var(--t-text);font-weight:500;width:42px;text-align:right}
+  .yield-chg{font-size:10px;width:55px;text-align:right}
+
+  /* DATA TABLE */
+  table.data-table{width:100%;border-collapse:collapse;font-size:11px}
+  table.data-table th{color:var(--t-text);font-size:9px;letter-spacing:.1em;text-transform:uppercase;padding:7px 10px;border-bottom:1px solid var(--t-border2);text-align:left;font-weight:500;font-family:inherit}
+  table.data-table td{padding:7px 10px;border-bottom:1px solid var(--t-border);color:var(--t-text);font-family:inherit}
+  table.data-table tr:last-child td{border-bottom:none}
+  table.data-table tr:hover td{background:rgba(255,255,255,.02)}
+
+  /* TAGS */
+  .tag{display:inline-block;padding:2px 8px;border-radius:3px;font-size:9px;letter-spacing:.06em;text-transform:uppercase;font-weight:500}
+  .tag-green{background:var(--t-green-dim);color:var(--t-green);border:1px solid rgba(0,212,106,.2)}
+  .tag-red{background:var(--t-red-dim);color:var(--t-red);border:1px solid rgba(255,74,74,.2)}
+  .tag-amber{background:var(--t-amber-dim);color:var(--t-amber);border:1px solid rgba(245,166,35,.2)}
+  .tag-blue{background:var(--t-blue-dim);color:var(--t-blue);border:1px solid rgba(77,184,255,.2)}
+
+  /* STATUS BAR TOP */
+  .status-bar-top{display:flex;gap:12px;padding:12px;background:var(--t-surface);border-bottom:1px solid var(--t-border2)}
+  .status-chip{border:1px solid var(--t-border);background:rgba(10,14,19,.8);padding:10px 12px;display:flex;flex-direction:column;gap:5px;border-radius:4px;flex:1}
+  .status-chip span{color:var(--t-muted);font-size:9px;letter-spacing:.1em;text-transform:uppercase}
+  .status-chip strong{color:var(--t-text);font-size:13px;letter-spacing:-.02em}
+
+  .header-footer-mirror{background:var(--t-surface);border-bottom:1px solid var(--t-border2);padding:7px 20px;font-size:9px;color:var(--t-muted);display:flex;justify-content:space-between;align-items:center;letter-spacing:.06em;gap:16px}
+  .header-footer-mirror .source{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1}
+  .header-footer-mirror .status{white-space:nowrap}
+  .header-footer-mirror .updated{white-space:nowrap}
+
+  /* HEADER HERO */
+  .hero{padding:12px 0 6px;text-align:center;margin-bottom:6px}
+  .hero-title{font-size:11px;color:var(--t-muted);letter-spacing:.2em;text-transform:uppercase}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="terminal">
+    <div class="term-header">
+      <div class="term-dots">
+        <div class="term-dot dot-r"></div>
+        <div class="term-dot dot-y"></div>
+        <div class="term-dot dot-g"></div>
+      </div>
+      <div class="term-title"><span>FED_MACRO_TERMINAL</span> v2.1 — LIVE FRED DATA<span class="cursor"></span></div>
+      <div class="term-time" id="clock"></div>
+    </div>
+
+    <div class="header-footer-mirror">
+      <span class="source"><span class="prompt-text">$</span> source: api.stlouisfed.org/fred — St. Louis Federal Reserve</span>
+      <span id="header-data-status" class="status">● connecting...</span>
+      <span id="header-last-updated" class="updated"></span>
+    </div>
+
+    <div class="status-bar-top">
+      <div class="status-chip"><span>Data Status</span><strong id="data-status-top">● connecting...</strong></div>
+      <div class="status-chip"><span>Last Update</span><strong id="last-update-top">-</strong></div>
+    </div>
+
+    <div class="tabs" id="tabs">
+      <div class="tab active" data-tab="overview"><span class="tab-icon">◉</span>OVERVIEW</div>
+      <div class="tab" data-tab="inflation"><span class="tab-icon">△</span>INFLATION</div>
+      <div class="tab" data-tab="labor"><span class="tab-icon">◈</span>LABOR</div>
+      <div class="tab" data-tab="growth"><span class="tab-icon">▲</span>GROWTH</div>
+      <div class="tab" data-tab="rates"><span class="tab-icon">◇</span>RATES & CREDIT</div>
+      <div class="tab" data-tab="financial"><span class="tab-icon">◆</span>FINANCIAL COND.</div>
+      <div class="tab" data-tab="analysis"><span class="tab-icon">≡</span>FED ANALYSIS</div>
+    </div>
+
+    <div class="content">
+      <!-- OVERVIEW -->
+      <div class="panel active" id="panel-overview">
+        <div class="section-head">KEY MACRO INDICATORS — REAL-TIME FRED FEED</div>
+        <div class="grid-4" id="overview-kpis"><div class="loading">Fetching data from FRED<span class="blink">_</span></div></div>
+        <div class="grid-2">
+          <div class="chart-wrap">
+            <div class="chart-title">FED FUNDS RATE vs CORE CPI (YoY %)</div>
+            <div style="position:relative;height:190px"><canvas id="chart-overview-rates" role="img" aria-label="Fed funds rate vs CPI inflation over time">Loading.</canvas></div>
+          </div>
+          <div class="chart-wrap">
+            <div class="chart-title">UNEMPLOYMENT RATE (U-3, %)</div>
+            <div style="position:relative;height:190px"><canvas id="chart-overview-unemp" role="img" aria-label="US unemployment rate over time">Loading.</canvas></div>
+          </div>
+        </div>
+        <div class="chart-wrap">
+          <div class="chart-title">MACRO SIGNAL BOARD — DUAL MANDATE SCORECARD</div>
+          <div id="signal-board"></div>
+        </div>
+      </div>
+
+      <!-- INFLATION -->
+      <div class="panel" id="panel-inflation">
+        <div class="section-head">INFLATION METRICS — DUAL MANDATE: PRICE STABILITY TARGET 2%</div>
+        <div class="grid-4" id="infl-kpis"><div class="loading">Loading inflation data<span class="blink">_</span></div></div>
+        <div class="grid-2">
+          <div class="chart-wrap">
+            <div class="chart-title">CPI ALL ITEMS vs CORE CPI (YoY %)</div>
+            <div style="position:relative;height:200px"><canvas id="chart-cpi" role="img" aria-label="CPI headline vs core inflation">Loading.</canvas></div>
+          </div>
+          <div class="chart-wrap">
+            <div class="chart-title">PCE DEFLATOR vs CORE PCE (YoY %) — FED'S PREFERRED</div>
+            <div style="position:relative;height:200px"><canvas id="chart-pce" role="img" aria-label="PCE vs core PCE inflation">Loading.</canvas></div>
+          </div>
+        </div>
+        <div class="analysis-box" id="infl-analysis">
+          <div class="alabel">POWELL'S INFLATION LENS</div>
+          <span id="infl-text">Analyzing inflation dynamics<span class="blink">_</span></span>
+        </div>
+      </div>
+
+      <!-- LABOR -->
+      <div class="panel" id="panel-labor">
+        <div class="section-head">LABOR MARKET — DUAL MANDATE: MAXIMUM EMPLOYMENT</div>
+        <div class="grid-4" id="labor-kpis"><div class="loading">Loading labor data<span class="blink">_</span></div></div>
+        <div class="grid-2">
+          <div class="chart-wrap">
+            <div class="chart-title">UNEMPLOYMENT RATE U-3 (%)</div>
+            <div style="position:relative;height:190px"><canvas id="chart-unemp" role="img" aria-label="Unemployment rate series">Loading.</canvas></div>
+          </div>
+          <div class="chart-wrap">
+            <div class="chart-title">NONFARM PAYROLLS — MoM CHANGE (thousands)</div>
+            <div style="position:relative;height:190px"><canvas id="chart-payrolls" role="img" aria-label="Monthly nonfarm payroll changes">Loading.</canvas></div>
+          </div>
+        </div>
+        <div class="analysis-box">
+          <div class="alabel">LABOR MARKET ASSESSMENT</div>
+          <span id="labor-text">Analyzing labor market conditions<span class="blink">_</span></span>
+        </div>
+      </div>
+
+      <!-- GROWTH -->
+      <div class="panel" id="panel-growth">
+        <div class="section-head">ECONOMIC GROWTH & OUTPUT</div>
+        <div class="grid-4" id="growth-kpis"><div class="loading">Loading growth data<span class="blink">_</span></div></div>
+        <div class="grid-2">
+          <div class="chart-wrap">
+            <div class="chart-title">REAL GDP GROWTH (QoQ ANNUALIZED %)</div>
+            <div style="position:relative;height:190px"><canvas id="chart-gdp" role="img" aria-label="Real GDP quarterly growth">Loading.</canvas></div>
+          </div>
+          <div class="chart-wrap">
+            <div class="chart-title">INDUSTRIAL PRODUCTION INDEX</div>
+            <div style="position:relative;height:190px"><canvas id="chart-indpro" role="img" aria-label="Industrial production index">Loading.</canvas></div>
+          </div>
+        </div>
+        <div class="analysis-box">
+          <div class="alabel">GROWTH ASSESSMENT</div>
+          <span id="growth-text">Analyzing growth dynamics<span class="blink">_</span></span>
+        </div>
+      </div>
+
+      <!-- RATES -->
+      <div class="panel" id="panel-rates">
+        <div class="section-head">INTEREST RATES & CREDIT CONDITIONS</div>
+        <div class="grid-2">
+          <div class="chart-wrap">
+            <div class="chart-title">TREASURY YIELD CURVE — CURRENT</div>
+            <div id="yield-table"><div class="loading">Loading yield curve<span class="blink">_</span></div></div>
+          </div>
+          <div class="chart-wrap">
+            <div class="chart-title">2Y–10Y YIELD SPREAD (%) — RECESSION SIGNAL</div>
+            <div style="position:relative;height:200px"><canvas id="chart-spread" role="img" aria-label="2Y-10Y yield spread over time">Loading.</canvas></div>
+          </div>
+        </div>
+        <div class="chart-wrap">
+          <div class="chart-title">HIGH YIELD CORPORATE OAS (bps) — CREDIT STRESS GAUGE</div>
+          <div style="position:relative;height:160px"><canvas id="chart-hy" role="img" aria-label="High yield credit spreads">Loading.</canvas></div>
+        </div>
+        <div class="analysis-box">
+          <div class="alabel">RATES & FINANCIAL CONDITIONS</div>
+          <span id="rates-text">Analyzing rate environment<span class="blink">_</span></span>
+        </div>
+      </div>
+
+      <!-- FINANCIAL -->
+      <div class="panel" id="panel-financial">
+        <div class="section-head">FINANCIAL CONDITIONS & SYSTEMIC INDICATORS</div>
+        <div class="grid-4" id="fin-kpis"><div class="loading">Loading financial data<span class="blink">_</span></div></div>
+        <div class="grid-2">
+          <div class="chart-wrap">
+            <div class="chart-title">FED BALANCE SHEET ($ TRILLIONS) — QT PROGRESS</div>
+            <div style="position:relative;height:190px"><canvas id="chart-bs" role="img" aria-label="Federal Reserve balance sheet size">Loading.</canvas></div>
+          </div>
+          <div class="chart-wrap">
+            <div class="chart-title">M2 MONEY SUPPLY GROWTH (YoY %)</div>
+            <div style="position:relative;height:190px"><canvas id="chart-m2" role="img" aria-label="M2 money supply growth rate">Loading.</canvas></div>
+          </div>
+        </div>
+        <div class="analysis-box">
+          <div class="alabel">FINANCIAL STABILITY MONITOR</div>
+          <span id="fin-text">Analyzing financial conditions<span class="blink">_</span></span>
+        </div>
+      </div>
+
+      <!-- ANALYSIS -->
+      <div class="panel" id="panel-analysis">
+        <div class="section-head">SYNTHETIC FED ANALYSIS — AI-POWERED FOMC ASSESSMENT</div>
+        <div class="analysis-box" style="border-left-color:var(--t-green)">
+          <div class="alabel" style="color:var(--t-green)">DUAL MANDATE STATUS</div>
+          <div id="analysis-mandate">Loading dual mandate assessment<span class="blink">_</span></div>
+        </div>
+        <div class="analysis-box" style="border-left-color:var(--t-amber)">
+          <div class="alabel" style="color:var(--t-amber)">POLICY RATE OUTLOOK — TAYLOR RULE ANALYSIS</div>
+          <div id="analysis-rate">Loading rate outlook<span class="blink">_</span></div>
+        </div>
+        <div class="analysis-box" style="border-left-color:var(--t-purple)">
+          <div class="alabel" style="color:var(--t-purple)">RISK BALANCE</div>
+          <div id="analysis-risk">Loading risk assessment<span class="blink">_</span></div>
+        </div>
+        <div class="analysis-box" style="border-left-color:var(--t-red)">
+          <div class="alabel" style="color:var(--t-red)">FINANCIAL STABILITY FLAGS</div>
+          <div id="analysis-stability">Loading stability indicators<span class="blink">_</span></div>
+        </div>
+        <div class="analysis-box" style="border-left-color:var(--t-dim)">
+          <div class="alabel" style="color:var(--t-muted)">DATA GLOSSARY</div>
+          <div style="font-size:11px;color:var(--t-muted);line-height:2">
+            <b style="color:var(--t-text)">CPI</b> — Consumer Price Index (BLS) &nbsp;|&nbsp;
+            <b style="color:var(--t-text)">PCE</b> — Personal Consumption Expenditure deflator (Fed's preferred) &nbsp;|&nbsp;
+            <b style="color:var(--t-text)">JOLTS</b> — Job Openings &amp; Labor Turnover Survey &nbsp;|&nbsp;
+            <b style="color:var(--t-text)">NFP</b> — Nonfarm Payrolls &nbsp;|&nbsp;
+            <b style="color:var(--t-text)">EFFR</b> — Effective Fed Funds Rate &nbsp;|&nbsp;
+            <b style="color:var(--t-text)">OAS</b> — Option-Adjusted Spread &nbsp;|&nbsp;
+            <b style="color:var(--t-text)">QT</b> — Quantitative Tightening &nbsp;|&nbsp;
+            <b style="color:var(--t-text)">NFCI</b> — National Financial Conditions Index &nbsp;|&nbsp;
+            <b style="color:var(--t-text)">NAIRU</b> — Non-Accelerating Inflation Rate of Unemployment<br>
+            All data sourced live from <b style="color:var(--t-blue)">FRED API</b> — Federal Reserve Bank of St. Louis.
+          </div>
+        </div>
+      </div>
+    </div><!-- /content -->
+
+    <div class="status-bar">
+      <span><span class="prompt-text">$</span> source: api.stlouisfed.org/fred — St. Louis Federal Reserve</span>
+      <span id="data-status">● connecting...</span>
+      <span id="last-updated"></span>
+    </div>
+  </div><!-- /terminal -->
+</div><!-- /app -->
+
+<script>
+const FRED = 'https://api.stlouisfed.org/fred/series/observations';
+const KEY = '__FRED_API_KEY__';
+
+const store = {};
+const charts = {};
+
+// Snapshot loader — fetches data/fred_snapshot.json (same-origin, no CORS restriction)
+let _snapshotLoading = null;
+let _snapshotData = null;
+function loadSnapshot() {
+  if (!_snapshotLoading) {
+    _snapshotLoading = fetch('data/fred_snapshot.json', {cache:'no-store'})
+      .then(r => r.ok ? r.json() : Promise.reject(new Error('Snapshot not found')))
+      .then(data => { _snapshotData = data; return data; })
+      .catch(() => null);
+  }
+  return _snapshotLoading;
+}
+
+const IS_GITHUB_PAGES = window.location.hostname.endsWith('github.io');
+
+async function fetchFred(seriesId, limit=60, retries=2) {
+  // Snapshot first — same-origin static file, no CORS restriction
+  try {
+    const snapshot = await loadSnapshot();
+    if (snapshot && snapshot.series && snapshot.series[seriesId] && snapshot.series[seriesId].length) {
+      let obs = snapshot.series[seriesId];
+      if (obs.length > limit) obs = obs.slice(-limit);
+      return obs;
+    }
+  } catch(_) {}
+  // Direct FRED API: only attempted locally (server.js proxies it).
+  // On GitHub Pages FRED blocks all browser requests with CORS — skip entirely.
+  if (IS_GITHUB_PAGES) return [];
+  const url = `${FRED}?series_id=${seriesId}&api_key=${KEY}&file_type=json&limit=${limit}&sort_order=desc`;
+  for (let i=0; i<=retries; i++) {
+    try {
+      const r = await fetch(url);
+      if (!r.ok) { console.warn('FRED ' + seriesId + ': HTTP ' + r.status); continue; }
+      const d = await r.json();
+      if (d.error_message) { console.warn('FRED ' + seriesId + ': ' + d.error_message); return []; }
+      if (!d.observations) return [];
+      return d.observations.filter(o => o.value !== '.').reverse();
+    } catch(e) {
+      console.warn('FRED ' + seriesId + ' attempt ' + (i+1) + ' failed:', e.message);
+      if (i < retries) await new Promise(r => setTimeout(r, 600 * (i+1)));
+    }
+  }
+  return [];
+}
+
+function pct(obs, periods=12) {
+  if (!obs || obs.length < periods+1) return null;
+  const cur = parseFloat(obs[obs.length-1].value);
+  const p = parseFloat(obs[obs.length-1-periods].value);
+  return ((cur-p)/Math.abs(p))*100;
+}
+
+function latest(obs) {
+  if (!obs || !obs.length) return null;
+  return parseFloat(obs[obs.length-1].value);
+}
+
+function prev(obs, n=1) {
+  if (!obs || obs.length < n+1) return null;
+  return parseFloat(obs[obs.length-1-n].value);
+}
+
+function fmt(v, decimals=2) {
+  if (v===null||v===undefined||isNaN(v)) return '—';
+  return v.toFixed(decimals);
+}
+
+function fmtT(v) {
+  if (!v) return '—';
+  return '$'+fmt(v/1e6,2)+'T';
+}
+
+function changeTag(chg, invert=false) {
+  if (chg===null||isNaN(chg)) return '<span class="neu">—</span>';
+  const pos = invert ? chg<0 : chg>0;
+  const cls = pos ? 'up' : 'down';
+  const arrow = chg>0 ? '▲' : '▼';
+  return `<span class="${cls}">${arrow} ${fmt(Math.abs(chg),2)}%</span>`;
+}
+
+function makeChart(id, type, labels, datasets, opts={}) {
+  const ctx = document.getElementById(id);
+  if (!ctx) return;
+  if (charts[id]) charts[id].destroy();
+  charts[id] = new Chart(ctx, {
+    type,
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 600 },
+      plugins: {
+        legend: { display: opts.legend||false, labels:{color:'#8bb4cc',font:{size:10,family:"'JetBrains Mono',monospace"},boxWidth:10,boxHeight:10,padding:12} },
+        tooltip: { mode:'index', intersect:false, backgroundColor:'#0f1419', borderColor:'#1e2a35', borderWidth:1, titleColor:'#8bb4cc', bodyColor:'#eaf2ff', titleFont:{size:10,family:"'JetBrains Mono',monospace"}, bodyFont:{size:11,family:"'JetBrains Mono',monospace"}, padding:10 }
+      },
+      scales: {
+        x: { ticks:{color:'#8bb4cc',font:{size:9,family:"'JetBrains Mono',monospace"},maxTicksLimit:opts.maxX||8,maxRotation:0}, grid:{color:'#141a21',lineWidth:.5}, border:{color:'#1e2a35'} },
+        y: { ticks:{color:'#8bb4cc',font:{size:9,family:"'JetBrains Mono',monospace"}}, grid:{color:'#141a21',lineWidth:.5}, border:{color:'#1e2a35'}, ...(opts.yOpts||{}) }
+      },
+      ...(opts.extra||{})
+    }
+  });
+}
+
+function lastN(obs, n=24) { return obs.slice(-n); }
+
+function yoyPct(obs) {
+  return obs.map((o,i) => {
+    if (i<12) return null;
+    const cur = parseFloat(o.value);
+    const py = parseFloat(obs[i-12].value);
+    return ((cur-py)/Math.abs(py))*100;
+  });
+}
+
+function momChange(obs) {
+  return obs.map((o,i) => {
+    if (i===0) return 0;
+    return parseFloat(o.value)-parseFloat(obs[i-1].value);
+  });
+}
+
+function gdpGrowth(obs) {
+  return obs.map((o,i) => {
+    if (i===0) return 0;
+    const cur = parseFloat(o.value);
+    const p = parseFloat(obs[i-1].value);
+    return ((cur-p)/Math.abs(p))*400;
+  });
+}
+
+// Clock
+function clock() {
+  document.getElementById('clock').textContent = new Date().toUTCString().replace('GMT','UTC');
+}
+clock();
+setInterval(clock, 1000);
+
+// Tabs
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('panel-'+tab.dataset.tab).classList.add('active');
+    setTimeout(() => renderTab(tab.dataset.tab), 50);
+  });
+});
+
+const rendered = new Set();
+
+function setDataStatus(html) {
+  const top = document.getElementById('data-status-top') || document.querySelector('.status-bar-top #data-status');
+  const bottom = document.getElementById('data-status');
+  const header = document.getElementById('header-data-status');
+  if (top) top.innerHTML = html;
+  if (bottom) bottom.innerHTML = html;
+  if (header) header.innerHTML = html;
+}
+
+function setLastUpdated(text) {
+  const top = document.getElementById('last-update-top') || document.getElementById('lastUpdate');
+  const bottom = document.getElementById('last-updated');
+  const header = document.getElementById('header-last-updated');
+  const isSnapshot = typeof text === 'string' && text.toLowerCase().startsWith('snapshot:');
+  const isNoData = typeof text === 'string' && text.toLowerCase() === 'no data available';
+  [top, bottom, header].forEach(el => {
+    if (!el) return;
+    el.textContent = text;
+    el.style.color = (isSnapshot || isNoData) ? 'var(--t-green)' : '';
+  });
+}
+
+async function init() {
+  setDataStatus('<span style="color:var(--t-amber)">● loading...</span>');
+  const fetches = [
+    ['FEDFUNDS',24],['CPIAUCSL',84],['CPILFESL',84],
+    ['PCEPI',84],['PCEPILFE',84],['UNRATE',60],
+    ['PAYEMS',60],['GDPC1',28],['INDPRO',60],
+    ['DGS2',120],['DGS10',120],['DGS30',60],['T10Y2Y',120],
+    ['WALCL',120],['M2SL',72],['BAMLH0A0HYM2',120],
+    ['CIVPART',60],['JTSJOL',60],['DGS1MO',60],
+    ['DGS3MO',60],['DGS6MO',60],['DGS1',60],
+    ['DGS5',60],['DGS7',60],['DGS20',60],['NFCI',60]
+  ];
+
+  // Fetch in small batches to avoid FRED rate limiting (120 req/min)
+  const BATCH = 5;
+  let loaded = 0;
+  for (let i=0; i<fetches.length; i+=BATCH) {
+    const batch = fetches.slice(i, i+BATCH);
+    await Promise.all(batch.map(async ([id, lim]) => {
+      store[id] = await fetchFred(id, lim);
+      loaded++;
+      setDataStatus('<span style="color:var(--t-amber)">● loading ' + loaded + '/' + fetches.length + '...</span>');
+    }));
+    if (i+BATCH < fetches.length) await new Promise(r => setTimeout(r, 300));
+  }
+
+  const loaded_count = Object.values(store).filter(v => v && v.length > 0).length;
+  if (loaded_count === 0) {
+    // Try snapshot as fallback if API failed
+    const snapshot = await loadSnapshot();
+    if (snapshot && snapshot.series) {
+      for (const [id] of fetches) {
+        if (snapshot.series[id]) store[id] = snapshot.series[id];
+      }
+      const snapshot_count = Object.values(store).filter(v => v && v.length > 0).length;
+      if (snapshot_count > 0) {
+        setDataStatus('<span style="color:var(--t-amber)">● snapshot (' + snapshot_count + '/' + fetches.length + ' series)</span>');
+        setLastUpdated('snapshot: ' + new Date(snapshot.generatedAt).toLocaleString());
+        renderTab('overview');
+        return;
+      }
+    }
+    setDataStatus('<span style="color:var(--t-red)">● API error — check console</span>');
+    setLastUpdated('No data available');
+    return;
+  }
+
+  setDataStatus('<span style="color:var(--t-green)">● live (' + loaded_count + '/' + fetches.length + ' series)</span>');
+  const ts = _snapshotData && _snapshotData.generatedAt
+    ? 'snapshot: ' + new Date(_snapshotData.generatedAt).toLocaleString()
+    : 'updated: ' + new Date().toLocaleTimeString() + ' local';
+  setLastUpdated(ts);
+  renderTab('overview');
+}
+
+function renderTab(tab) {
+  if (rendered.has(tab)) return;
+  rendered.add(tab);
+  if (tab==='overview') renderOverview();
+  if (tab==='inflation') renderInflation();
+  if (tab==='labor') renderLabor();
+  if (tab==='growth') renderGrowth();
+  if (tab==='rates') renderRates();
+  if (tab==='financial') renderFinancial();
+  if (tab==='analysis') renderAnalysis();
+}
+
+function renderOverview() {
+  const ffr = latest(store['FEDFUNDS']);
+  const cpiYoy = pct(store['CPIAUCSL']);
+  const unemp = latest(store['UNRATE']);
+  const unempPrev = prev(store['UNRATE']);
+  const t10 = latest(store['DGS10']);
+  const spread = latest(store['T10Y2Y']);
+  const corePce = pct(store['PCEPILFE']); // Use PCEPILFE from snapshot instead of CPILFESL
+  const payNow = latest(store['PAYEMS']);
+  const payPrev = prev(store['PAYEMS']);
+  const payAdd = payNow - payPrev;
+  const hy = latest(store['BAMLH0A0HYM2']); // May be undefined in snapshot mode
+
+  document.getElementById('overview-kpis').innerHTML = [
+    ffr !== undefined && {label:'FED FUNDS RATE', val:fmt(ffr)+'%', chg:null, sub:'effective rate', neutral:true},
+    cpiYoy !== undefined && {label:'CPI YoY', val:fmt(cpiYoy)+'%', chg:cpiYoy-(pct(store['CPIAUCSL'],13)||0), sub:'headline inflation', invert:true},
+    unemp !== undefined && {label:'UNEMPLOYMENT', val:fmt(unemp)+'%', chg:unemp-unempPrev, sub:'U-3 rate', invert:true},
+    t10 !== undefined && {label:'10Y TREASURY', val:fmt(t10)+'%', chg:t10-prev(store['DGS10']), sub:'benchmark yield', neutral:true},
+    corePce !== undefined && {label:'CORE PCE YoY', val:fmt(corePce)+'%', chg:null, sub:"Fed's 2% target gauge"},
+    payAdd !== undefined && {label:'NFP MoM CHANGE', val:(payAdd>0?'+':'')+fmt(payAdd,0)+'K', chg:null, sub:'nonfarm payrolls'},
+    spread !== undefined && {label:'2Y-10Y SPREAD', val:fmt(spread,2)+'%', chg:spread-prev(store['T10Y2Y']), sub:spread<0?'⚠ inverted curve':'positive slope', neutral:true},
+    hy !== undefined && {label:'HY OAS SPREAD', val:fmt(hy,0)+' bps', chg:null, sub:'credit risk gauge'},
+  ].filter(Boolean).map(k => `<div class="kpi">
+    <div class="kpi-label">${k.label}</div>
+    <div class="kpi-val">${k.val}</div>
+    <div class="kpi-change">${k.neutral?'<span class="neu">—</span>':changeTag(k.chg,k.invert)}</div>
+    <div class="kpi-sub">${k.sub}</div>
+  </div>`).join('');
+
+  const ffrObs = lastN(store['FEDFUNDS'],24);
+  const cpiObs = lastN(store['CPIAUCSL'],36);
+  const coreCpiObs = lastN(store['PCEPILFE'],36); // Use PCEPILFE instead of CPILFESL
+  const cpiYoyArr = yoyPct(cpiObs);
+  const coreCpiYoyArr = yoyPct(coreCpiObs);
+
+  if (ffrObs.length) {
+    makeChart('chart-overview-rates','line',
+      ffrObs.map(o => o.date.slice(0,7)),
+      [
+        {label:'FFR',data:ffrObs.map(o=>parseFloat(o.value)),borderColor:'#4db8ff',backgroundColor:'rgba(77,184,255,.07)',borderWidth:2,pointRadius:0,tension:.3,fill:true},
+        {label:'Core CPI YoY',data:coreCpiYoyArr.slice(-24),borderColor:'#f5a623',backgroundColor:'transparent',borderWidth:1.5,pointRadius:0,tension:.3,fill:false,borderDash:[4,3]}
+      ],
+      {legend:true,maxX:12}
+    );
+  }
+
+  const unObs = lastN(store['UNRATE'],48);
+  if (unObs.length) {
+    makeChart('chart-overview-unemp','line',
+      unObs.map(o => o.date.slice(0,7)),
+      [{label:'Unemployment %',data:unObs.map(o=>parseFloat(o.value)),borderColor:'#f5a623',backgroundColor:'rgba(245,166,35,.07)',borderWidth:2,pointRadius:0,tension:.3,fill:true},
+       {label:'NAIRU ~4%',data:Array(unObs.length).fill(4),borderColor:'rgba(255,74,74,.4)',borderWidth:1,pointRadius:0,borderDash:[6,4],fill:false}],
+      {legend:true}
+    );
+  }
+
+  const signals = [
+    {label:'Price Stability — Core PCE vs 2%',val:corePce,thresh:'2.0%',good:v=>v<=2.3,warn:v=>v<=3.5},
+    {label:'Core CPI',val:pct(store['CPILFESL']),thresh:'2.0%',good:v=>v<=2.5,warn:v=>v<=3.5},
+    {label:'Unemployment (NAIRU ~4.0%)',val:unemp,thresh:'4.0%',good:v=>v<=4.3,warn:v=>v<=5.0,invert:true},
+    {label:'NFP Monthly Additions',val:payAdd,thresh:'>100K',good:v=>v>100,warn:v=>v>50,invert:false,suffix:'K',noFmt:true},
+    {label:'Yield Curve (2Y-10Y)',val:spread,thresh:'>0%',good:v=>v>0.1,warn:v=>v>-0.5},
+    {label:'HY Credit Spreads',val:hy,thresh:'<400 bps',good:v=>v<350,warn:v=>v<550,invert:true,suffix:' bps',noFmt:true},
+    {label:'Labor Participation Rate',val:latest(store['CIVPART']),thresh:'>63%',good:v=>v>63,warn:v=>v>61.5},
+    {label:'M2 Money Growth (YoY)',val:pct(store['M2SL']),thresh:'2–6%',good:v=>v>0&&v<7,warn:v=>v<12,invert:false},
+  ];
+
+  document.getElementById('signal-board').innerHTML = `
+    <table class="data-table">
+      <tr><th>INDICATOR</th><th>CURRENT VALUE</th><th>THRESHOLD</th><th>STATUS</th></tr>
+      ${signals.map(s => {
+        let tag, status;
+        if (s.val===null||isNaN(s.val)) { tag='tag-blue'; status='N/A'; }
+        else if (s.good(s.val)) { tag='tag-green'; status='ON TARGET'; }
+        else if (s.warn(s.val)) { tag='tag-amber'; status='WATCH'; }
+        else { tag='tag-red'; status='CONCERN'; }
+        const display = s.val!==null&&!isNaN(s.val) ? fmt(s.val,s.suffix==='K'?0:s.suffix===' bps'?0:2)+(s.suffix||'%') : '—';
+        return `<tr><td>${s.label}</td><td style="font-weight:500;color:var(--t-text)">${display}</td><td style="color:var(--t-muted)">${s.thresh}</td><td><span class="tag ${tag}">${status}</span></td></tr>`;
+      }).join('')}
+    </table>`;
+}
+
+function renderInflation() {
+  const curCpi = pct(store['CPIAUCSL']);
+  const curCore = pct(store['CPILFESL']);
+  const curPce = pct(store['PCEPI']);
+  const curCorePce = pct(store['PCEPILFE']);
+
+  document.getElementById('infl-kpis').innerHTML = [
+    {label:'HEADLINE CPI', val:fmt(curCpi)+'%', sub:'YoY all items'},
+    {label:'CORE CPI', val:fmt(curCore)+'%', sub:'ex food & energy'},
+    {label:'HEADLINE PCE', val:fmt(curPce)+'%', sub:'PCE deflator YoY'},
+    {label:'CORE PCE', val:fmt(curCorePce)+'%', sub:"Fed's 2% target gauge"},
+  ].map(k => `<div class="kpi"><div class="kpi-label">${k.label}</div><div class="kpi-val">${k.val}</div><div class="kpi-sub">${k.sub}</div></div>`).join('');
+
+  const n=36;
+  const cpiObs = lastN(store['CPIAUCSL'],n+12);
+  const coreCpiObs = lastN(store['CPILFESL'],n+12);
+  const pceObs = lastN(store['PCEPI'],n+12);
+  const corePceObs = lastN(store['PCEPILFE'],n+12);
+  const labels = lastN(store['CPIAUCSL'],n).map(o=>o.date.slice(0,7));
+
+  const cpiY = yoyPct(cpiObs).slice(-n);
+  const coreCpiY = yoyPct(coreCpiObs).slice(-n);
+  const pceY = yoyPct(pceObs).slice(-n);
+  const corePceY = yoyPct(corePceObs).slice(-n);
+
+  makeChart('chart-cpi','line',labels,[
+    {label:'Headline CPI',data:cpiY,borderColor:'#ff4a4a',backgroundColor:'rgba(255,74,74,.06)',borderWidth:2,pointRadius:0,tension:.3,fill:true},
+    {label:'Core CPI',data:coreCpiY,borderColor:'#f5a623',backgroundColor:'transparent',borderWidth:1.5,pointRadius:0,tension:.3,borderDash:[4,3]},
+    {label:'2% target',data:Array(n).fill(2),borderColor:'rgba(0,212,106,.4)',borderWidth:1,pointRadius:0,borderDash:[6,4],fill:false}
+  ],{legend:true,yOpts:{min:0}});
+
+  makeChart('chart-pce','line',labels,[
+    {label:'PCE',data:pceY,borderColor:'#b57bff',backgroundColor:'rgba(181,123,255,.06)',borderWidth:2,pointRadius:0,tension:.3,fill:true},
+    {label:'Core PCE',data:corePceY,borderColor:'#00e5cc',backgroundColor:'transparent',borderWidth:1.5,pointRadius:0,tension:.3,borderDash:[4,3]},
+    {label:'2% target',data:Array(n).fill(2),borderColor:'rgba(0,212,106,.4)',borderWidth:1,pointRadius:0,borderDash:[6,4],fill:false}
+  ],{legend:true,yOpts:{min:0}});
+
+  const gap = ((curCorePce||0)-2).toFixed(2);
+  document.getElementById('infl-text').innerHTML = `
+    Core PCE currently stands at <b>${fmt(curCorePce)}%</b>, representing a <b>${gap>0?gap+'% overshoot':Math.abs(gap)+'% undershoot'}</b> versus the Fed's 2% symmetric target.
+    ${(curCorePce||0)>3?'Inflation remains materially above target, maintaining pressure on the FOMC to hold rates restrictive or consider further tightening. Shelter components and supercore services (services ex-housing) are primary drivers.':
+    (curCorePce||0)>2.5?'Core inflation is on a disinflation trajectory but remains above target. The Fed will seek sustained progress before cutting. Goods deflation is helping, but services inflation remains sticky.':
+    'Inflation appears close to or at target. The Fed\'s disinflationary campaign has been largely successful. Attention shifts to maintaining price stability without overtightening.'}
+    <br><br>The divergence between headline CPI (<b>${fmt(curCpi)}%</b>) and core CPI (<b>${fmt(curCore)}%</b>) reflects ${(curCpi||0)>(curCore||0)?'food and energy adding to headline pressure':'commodity price relief suppressing headline below core'}.
+    The FOMC focuses on core PCE as the definitive measure, specifically monitoring "supercore" (services ex-housing) as the most persistent inflationary component.`;
+}
+
+function renderLabor() {
+  const unemp = latest(store['UNRATE']);
+  const unempPrev = prev(store['UNRATE']);
+  const civpart = latest(store['CIVPART']);
+  const payNow = latest(store['PAYEMS']);
+  const payPrev = prev(store['PAYEMS']);
+  const payAdd = payNow - payPrev;
+  const jolts = latest(store['JTSJOL']);
+
+  document.getElementById('labor-kpis').innerHTML = [
+    {label:'UNEMPLOYMENT U-3', val:fmt(unemp)+'%', sub:'headline rate'},
+    {label:'LABOR PARTICIPATION', val:fmt(civpart)+'%', sub:'civilian 16+'},
+    {label:'NFP MoM CHANGE', val:(payAdd>0?'+':'')+fmt(payAdd,0)+'K', sub:'nonfarm payrolls'},
+    {label:'JOB OPENINGS', val:fmt((jolts||0)/1000,2)+'M', sub:'JOLTS survey'},
+  ].map(k => `<div class="kpi"><div class="kpi-label">${k.label}</div><div class="kpi-val">${k.val}</div><div class="kpi-sub">${k.sub}</div></div>`).join('');
+
+  const unObs = lastN(store['UNRATE'],36);
+  makeChart('chart-unemp','line',unObs.map(o=>o.date.slice(0,7)),[
+    {label:'Unemployment %',data:unObs.map(o=>parseFloat(o.value)),borderColor:'#f5a623',backgroundColor:'rgba(245,166,35,.07)',borderWidth:2,pointRadius:0,tension:.3,fill:true},
+    {label:'NAIRU ~4%',data:Array(unObs.length).fill(4),borderColor:'rgba(255,74,74,.4)',borderWidth:1,pointRadius:0,borderDash:[6,4],fill:false}
+  ],{legend:true,yOpts:{min:2,max:10}});
+
+  const payObs = lastN(store['PAYEMS'],24);
+  const payChanges = momChange(payObs);
+  makeChart('chart-payrolls','bar',payObs.map(o=>o.date.slice(0,7)),[
+    {label:'NFP Change (K)',data:payChanges.map(v=>parseFloat(v.toFixed(0))),backgroundColor:payChanges.map(v=>v>=0?'rgba(0,212,106,.55)':'rgba(255,74,74,.55)'),borderColor:payChanges.map(v=>v>=0?'#00d46a':'#ff4a4a'),borderWidth:1}
+  ],{});
+
+  const nairu = 4.0;
+  const vtu = jolts/(((unemp||4)/100)*165000);
+  document.getElementById('labor-text').innerHTML = `
+    Unemployment at <b>${fmt(unemp)}%</b> is ${(unemp||0)<nairu?'<span style="color:var(--t-amber)">below</span>':'<span style="color:var(--t-green)">near/above</span>'} the FOMC's estimated NAIRU of ~${nairu}%.
+    Labor participation at <b>${fmt(civpart)}%</b> reflects ${(civpart||0)<63?'post-pandemic structural shifts reducing effective labor supply — the participation gap dampens the unemployment rate signal':
+    'healthy workforce engagement near pre-pandemic norms — headline unemployment is a clean signal'}.
+    <br><br>NFP added <b>${payAdd>0?'+':''}${fmt(payAdd,0)}K</b> jobs in the latest month. Trend consistent with soft-landing requires 75–150K/month.
+    The vacancies-to-unemployed ratio of <b>${fmt(vtu,2)}</b> ${vtu>1.2?'— above 1.0 — signals persistent labor demand exceeding supply, sustaining wage growth above inflation-consistent levels.':
+    'has normalized toward pre-COVID levels (~0.6–0.7), reducing wage-price spiral risk.'} Powell monitors this ratio as a key measure of labor market tightness beyond the headline unemployment rate.`;
+}
+
+function renderGrowth() {
+  const gdpObs = lastN(store['GDPC1'],20);
+  const gdpGrowthArr = gdpGrowth(gdpObs);
+  const curGdp = gdpGrowthArr[gdpGrowthArr.length-1];
+  const indpro = latest(store['INDPRO']);
+  const indproPrev = prev(store['INDPRO'],12);
+  const indproGrowth = ((indpro-indproPrev)/indproPrev)*100;
+
+  document.getElementById('growth-kpis').innerHTML = [
+    {label:'REAL GDP GROWTH', val:fmt(curGdp)+'%', sub:'QoQ annualized'},
+    {label:'INDUST. PRODUCTION', val:fmt(indproGrowth)+'%', sub:'YoY change'},
+    {label:'GDP VS POTENTIAL', val:curGdp>2?'ABOVE TREND':curGdp>0?'AT TREND':'CONTRACTION', sub:'~2% long-run potential'},
+    {label:'RECESSION SIGNAL', val:curGdp<0?'ELEVATED':'LOW-MODERATE', sub:'2 neg qtrs = recession'},
+  ].map(k => `<div class="kpi"><div class="kpi-label">${k.label}</div><div class="kpi-val">${k.val}</div><div class="kpi-sub">${k.sub}</div></div>`).join('');
+
+  makeChart('chart-gdp','bar',gdpObs.map(o=>o.date.slice(0,7)),[
+    {label:'Real GDP Growth (ann. %)',data:gdpGrowthArr.map(v=>parseFloat(v.toFixed(2))),backgroundColor:gdpGrowthArr.map(v=>v>=0?'rgba(0,212,106,.55)':'rgba(255,74,74,.55)'),borderColor:gdpGrowthArr.map(v=>v>=0?'#00d46a':'#ff4a4a'),borderWidth:1}
+  ],{});
+
+  const ipObs = lastN(store['INDPRO'],36);
+  makeChart('chart-indpro','line',ipObs.map(o=>o.date.slice(0,7)),[
+    {label:'Industrial Production Index',data:ipObs.map(o=>parseFloat(o.value)),borderColor:'#00e5cc',backgroundColor:'rgba(0,229,204,.07)',borderWidth:2,pointRadius:0,tension:.3,fill:true}
+  ],{});
+
+  document.getElementById('growth-text').innerHTML = `
+    Real GDP grew at an annualized rate of <b>${fmt(curGdp)}%</b> in the latest quarter, ${curGdp>2?'<b>above</b>':'near or below'} the Fed's estimated long-run potential of ~2%.
+    ${curGdp>3?'Above-trend growth complicates the disinflation path — strong demand keeps price pressures alive, reducing urgency for rate cuts. The FOMC may lean hawkish.':
+    curGdp>0?'Growth is moderating to a pace consistent with soft-landing expectations — slow enough to cool inflation, fast enough to avoid recession. The Fed\'s preferred outcome.':
+    '⚠️ Negative growth raises recession risk. The Fed faces a stagflation dilemma: inflation above target but growth contracting. Policy path becomes highly data-dependent.'}
+    <br><br>Industrial production YoY at <b>${fmt(indproGrowth)}%</b> captures the goods/manufacturing sector, historically more rate-sensitive than services. 
+    ${indproGrowth<0?'Contraction in industrial output suggests rate hikes are biting the real economy — a signal the Fed will weigh carefully.':'Positive industrial output is consistent with ongoing expansion.'}`;
+}
+
+function renderRates() {
+  const yieldsData = [
+    {label:'1M',id:'DGS1MO'},{label:'3M',id:'DGS3MO'},{label:'6M',id:'DGS6MO'},
+    {label:'1Y',id:'DGS1'},{label:'2Y',id:'DGS2'},{label:'5Y',id:'DGS5'},
+    {label:'7Y',id:'DGS7'},{label:'10Y',id:'DGS10'},{label:'20Y',id:'DGS20'},{label:'30Y',id:'DGS30'}
+  ];
+  const maxYield = Math.max(...yieldsData.map(y=>latest(store[y.id])||0));
+
+  document.getElementById('yield-table').innerHTML = yieldsData.map(y => {
+    const val = latest(store[y.id]);
+    const chg = val - (prev(store[y.id])||val);
+    const cls = chg>0.001?'up':chg<-0.001?'down':'neu';
+    const arrow = chg>0.001?'▲':'▼';
+    const barW = maxYield>0 ? (val/maxYield)*100 : 0;
+    return `<div class="yield-row">
+      <span class="yield-label">${y.label}</span>
+      <div class="yield-bar-wrap"><div class="yield-bar" style="width:${barW.toFixed(0)}%"></div></div>
+      <span class="yield-val">${fmt(val)}%</span>
+      <span class="yield-chg ${cls}">${!isNaN(chg)&&Math.abs(chg)>0.001?arrow+' '+fmt(Math.abs(chg)*100,1)+'bps':'—'}</span>
+    </div>`;
+  }).join('');
+
+  const spreadObs = lastN(store['T10Y2Y'],60);
+  makeChart('chart-spread','line',spreadObs.map(o=>o.date.slice(0,7)),[
+    {label:'2Y-10Y Spread (%)',data:spreadObs.map(o=>parseFloat(o.value)),borderColor:'#b57bff',backgroundColor:'rgba(181,123,255,.07)',borderWidth:2,pointRadius:0,tension:.3,fill:true},
+    {label:'Inversion line',data:Array(spreadObs.length).fill(0),borderColor:'rgba(255,74,74,.5)',borderWidth:1,pointRadius:0,borderDash:[6,4],fill:false}
+  ],{legend:true});
+
+  const hyObs = lastN(store['BAMLH0A0HYM2'],60);
+  makeChart('chart-hy','line',hyObs.map(o=>o.date.slice(0,7)),[
+    {label:'HY OAS (bps)',data:hyObs.map(o=>parseFloat(o.value)),borderColor:'#ff4a4a',backgroundColor:'rgba(255,74,74,.06)',borderWidth:2,pointRadius:0,tension:.3,fill:true}
+  ],{});
+
+  const spread = latest(store['T10Y2Y']);
+  const hy = latest(store['BAMLH0A0HYM2']);
+  const t10 = latest(store['DGS10']);
+  const t2 = latest(store['DGS2']);
+  document.getElementById('rates-text').innerHTML = `
+    The 10Y Treasury yields <b>${fmt(t10)}%</b> vs the 2Y at <b>${fmt(t2)}%</b>, producing a 2Y-10Y spread of <b>${fmt(spread,2)}%</b>.
+    ${(spread||0)<0?'⚠️ <b>Inverted yield curve</b> — historically precedes recessions by 12-18 months. The Fed monitors inversion duration and depth carefully as a leading indicator.':'A positively sloped curve suggests markets see stable or declining rates ahead — consistent with a soft-landing scenario.'}
+    <br><br>High-yield OAS at <b>${fmt(hy,0)} bps</b> indicates ${(hy||0)<350?'benign credit conditions — risk appetite is intact, corporate stress is low, financial conditions are not amplifying policy beyond intent':
+    (hy||0)<550?'moderate credit stress — some tightening at the margin, worth monitoring but not systemic':
+    '⚠️ elevated credit stress — financial conditions are significantly tighter than policy rates alone suggest, with potential for a credit crunch amplifying the economic slowdown'}.`;
+}
+
+function renderFinancial() {
+  const walcl = latest(store['WALCL']);
+  const walclPrev = prev(store['WALCL'],4);
+  const m2 = latest(store['M2SL']);
+  const m2Yoy = pct(store['M2SL']);
+  const nfci = latest(store['NFCI']);
+
+  document.getElementById('fin-kpis').innerHTML = [
+    {label:'FED BALANCE SHEET', val:fmtT(walcl), sub:'total assets'},
+    {label:'QT DIRECTION', val:(walcl||0)<(walclPrev||0)?'SHRINKING':'STABLE', sub:'4-week trend'},
+    {label:'M2 MONEY SUPPLY', val:'$'+fmt((m2||0)/1000,1)+'T', sub:'broad money'},
+    {label:'M2 GROWTH YoY', val:fmt(m2Yoy)+'%', sub:'monetary expansion'},
+  ].map(k => `<div class="kpi"><div class="kpi-label">${k.label}</div><div class="kpi-val">${k.val}</div><div class="kpi-sub">${k.sub}</div></div>`).join('');
+
+  const bsObs = lastN(store['WALCL'],60);
+  makeChart('chart-bs','line',bsObs.map(o=>o.date.slice(0,7)),[
+    {label:'Balance Sheet ($M)',data:bsObs.map(o=>parseFloat(o.value)),borderColor:'#00e5cc',backgroundColor:'rgba(0,229,204,.07)',borderWidth:2,pointRadius:0,tension:.3,fill:true}
+  ],{yOpts:{ticks:{callback:v=>'$'+fmt(v/1e6,1)+'T'}}});
+
+  const m2Obs = lastN(store['M2SL'],60);
+  const m2YoyArr = yoyPct(m2Obs);
+  makeChart('chart-m2','line',m2Obs.map(o=>o.date.slice(0,7)),[
+    {label:'M2 YoY %',data:m2YoyArr,borderColor:'#b57bff',backgroundColor:'rgba(181,123,255,.07)',borderWidth:2,pointRadius:0,tension:.3,fill:true},
+    {label:'0 line',data:Array(m2Obs.length).fill(0),borderColor:'rgba(255,74,74,.4)',borderWidth:1,pointRadius:0,borderDash:[6,4],fill:false}
+  ],{legend:true});
+
+  document.getElementById('fin-text').innerHTML = `
+    The Fed's balance sheet stands at <b>${fmtT(walcl)}</b>, ${(walcl||0)<(walclPrev||0)?'actively <b>shrinking via QT</b>, draining reserves and reducing system liquidity — consistent with the ongoing tightening cycle':'stable or expanding, maintaining baseline liquidity'}.
+    M2 growth at <b>${fmt(m2Yoy)}%</b> YoY is ${(m2Yoy||0)>6?'elevated — historically associated with future inflation with 12-24 month lag':(m2Yoy||0)<0?'<b>negative</b> — a historically rare and disinflationary signal, reducing future price pressure':'moderate, consistent with stable price dynamics and low inflationary impulse'}.
+    <br><br>NFCI at <b>${fmt(nfci,3)}</b> indicates ${(nfci||0)>0?'tighter-than-average financial conditions — policy transmission is working effectively':'looser-than-average conditions — financial markets may be easing ahead of the Fed\'s intent, a risk to the inflation outlook'}.
+    Yellen (Treasury) and Powell (Fed) both monitor the intersection of fiscal deficits, Treasury supply, QT pace, and overnight repo markets to ensure adequate system liquidity without reigniting inflation.`;
+}
+
+function renderAnalysis() {
+  const cpiYoy = pct(store['CPIAUCSL']);
+  const corePce = pct(store['PCEPILFE']);
+  const unemp = latest(store['UNRATE']);
+  const ffr = latest(store['FEDFUNDS']);
+  const spread = latest(store['T10Y2Y']);
+  const hy = latest(store['BAMLH0A0HYM2']);
+  const payNow = latest(store['PAYEMS']);
+  const payPrev = prev(store['PAYEMS']);
+  const payAdd = payNow - payPrev;
+  const inflGap = (corePce||0) - 2;
+  const unempGap = (unemp||0) - 4.0;
+  const realRate = (ffr||0)-(corePce||0);
+  const taylorRate = 2+(corePce||0)-2+0.5*((corePce||0)-2)+0.5*(4-(unemp||4));
+
+  document.getElementById('analysis-mandate').innerHTML = `
+    <b style="color:var(--t-green)">Price Stability:</b> Core PCE at <b>${fmt(corePce)}%</b> is <b>${inflGap>0?inflGap.toFixed(2)+'% above':'near'}</b> the 2% target.
+    ${inflGap>1?'Substantial overshoot — restrictive monetary policy is still required.':inflGap>0.3?'Approaching target but not sustained — hold or very cautious easing.':'Near/at target — mandate largely fulfilled on the price stability side.'}<br><br>
+    <b style="color:var(--t-amber)">Maximum Employment:</b> U-3 unemployment at <b>${fmt(unemp)}%</b> vs ~4.0% NAIRU estimate.
+    ${unempGap<-0.5?'Labor market is <b>tight</b> — wage growth above inflation-consistent levels persists. No employment mandate for rate cuts.':unempGap<0.5?'Labor market near full employment — balanced conditions support continued monitoring.':'Labor market softening — employment mandate may tilt toward easing if trend continues.'}
+    NFP added <b>${payAdd>0?'+':''}${fmt(payAdd,0)}K</b> in the latest month — ${payAdd>150?'robust, employment mandate not at risk':payAdd>75?'cooling toward sustainable pace':'weakening, worth monitoring closely'}.`;
+
+  document.getElementById('analysis-rate').innerHTML = `
+    Effective FFR: <b>${fmt(ffr)}%</b> &nbsp;|&nbsp; Real rate (FFR minus Core PCE): <b>${fmt(realRate)}%</b><br><br>
+    ${realRate>2?'Real rates are <b>meaningfully positive</b> — policy is genuinely restrictive. Historical evidence suggests this level is consistent with disinflation but carries recession risk if sustained too long.':
+    realRate>0.5?'Modestly positive real rates — mild restriction consistent with the last mile of disinflation without excess tightening.':
+    realRate>-0.5?'Real rates near zero — policy is at or near neutral. May be appropriate if inflation is convincingly converging.':
+    '<b>Negative real rates</b> — policy remains accommodative despite positive nominal FFR. Inconsistent with actively fighting above-target inflation.'}
+    <br><br>The <b>Taylor Rule</b> (simplified: r* = 2 + π + 0.5(π-2) + 0.5(4-U)) suggests an optimal policy rate of approximately <b>${fmt(taylorRate,2)}%</b> given current inflation and unemployment. The FFR is currently <b>${fmt((ffr||0)-taylorRate,2)}%</b> ${(ffr||0)>taylorRate?'above':'below'} the Taylor Rule implied rate.`;
+
+  document.getElementById('analysis-risk').innerHTML = `
+    <b style="color:var(--t-red)">Upside Inflation Risks:</b> ${(cpiYoy||0)>3?'Elevated — services/shelter inflation sticky, wage growth above target-consistent levels, fiscal policy remains expansionary.':'Moderate — disinflation on track but re-acceleration possible from supply shocks, fiscal expansion, or stronger-than-expected demand.'}<br><br>
+    <b style="color:var(--t-amber)">Downside Growth Risks:</b> ${(spread||0)<-0.3?'⚠️ Yield curve deeply inverted — historically reliable recession signal with 12-18 month lead time. Lagged effects of rate hikes still feeding through the economy.':(spread||0)<0?'Yield curve inverted — recession risk is elevated. Monitor credit conditions, labor data, and leading indicators closely.':'Curve normalizing — tail risk of sharp slowdown is reduced but not eliminated given cumulative tightening.'}<br><br>
+    <b style="color:var(--t-blue)">External Risks:</b> Dollar strength creates disinflationary impulse via cheaper imports but tightens global financial conditions and strains EM sovereign debt. Geopolitical supply shocks remain a key upside risk to energy and food prices.`;
+
+  document.getElementById('analysis-stability').innerHTML = `
+    <b>Credit Conditions:</b> HY OAS at ${fmt(hy,0)} bps — ${(hy||0)<350?'✓ Credit markets functioning normally, systemic risk is low':(hy||0)<550?'◉ Moderate stress — some credit tightening at the margin':'⚠️ Significant stress — potential for credit crunch amplifying economic slowdown'}.<br><br>
+    <b>Bank Lending:</b> Tightening SLOOS standards historically precede economic slowdowns by 2-4 quarters. The Fed monitors whether credit channel tightening amplifies policy transmission beyond intended levels.<br><br>
+    <b>Fiscal-Monetary Interaction:</b> Large fiscal deficits increase Treasury supply, pressuring long-end yields independently of Fed policy — a key driver of the "higher for longer" rate environment. Yellen's Treasury and Powell's Fed must coordinate on issuance timing to avoid market disruption.<br><br>
+    <b>FOMC Flags:</b> &nbsp;
+    ${(hy||0)>500?'<span class="tag tag-red">⚠ HY SPREADS WIDE</span>':' <span class="tag tag-green">✓ CREDIT OK</span>'}&nbsp;
+    ${(spread||0)<-0.25?'<span class="tag tag-red">⚠ CURVE INVERTED</span>':'<span class="tag tag-green">✓ CURVE NORMAL</span>'}&nbsp;
+    ${(corePce||0)>3?'<span class="tag tag-red">⚠ CORE PCE >3%</span>':'<span class="tag tag-green">✓ INFLATION TRENDING</span>'}&nbsp;
+    ${(unemp||0)>5?'<span class="tag tag-red">⚠ RISING UNEMP</span>':'<span class="tag tag-green">✓ LABOR SOLID</span>'}`;
+}
+
+init();
+</script>
+</body>
+</html>

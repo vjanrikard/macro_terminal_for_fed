@@ -1,0 +1,9 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "git commit": true,
+        "/^git log --oneline -- \\.github/workflows/deploy\\.yml \\| Select-Object -First 5; git show 0c3e464 --stat$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}

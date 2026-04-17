@@ -1,0 +1,37 @@
+name: Refresh FRED Snapshot
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  refresh-snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Refresh snapshot
+        env:
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+        run: python fetch_snapshot.py
+
+      - name: Commit snapshot updates
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/fred_snapshot.json
+          git diff --cached --quiet && echo "No snapshot changes to commit." && exit 0
+          git commit -m "Refresh FRED snapshot"
+          git push origin HEAD:main

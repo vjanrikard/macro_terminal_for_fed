@@ -1,0 +1,5 @@
+.env
+
+# Optional local overrides
+# (Tracked snapshot fallback is committed in data/fred_snapshot.json)
+index.html

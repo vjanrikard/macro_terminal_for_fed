@@ -1,0 +1,10 @@
+{
+  "name": "macro_terminal",
+  "version": "1.0.0",
+  "private": true,
+  "description": "FED macro dashboard with .env-backed API proxy",
+  "scripts": {
+    "start": "node server.js",
+    "build:snapshot": "node scripts/build-snapshot.js"
+  }
+}
