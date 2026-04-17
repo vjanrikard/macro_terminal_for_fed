@@ -4,9 +4,14 @@ on:
   push:
     branches: [ main ]
 
+permissions:
+  contents: write
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    env:
+      BUILD_FRED_API_KEY: ${{ secrets.FRED_API_KEY || secrets.FED_API_KEY || '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -14,7 +19,8 @@ jobs:
       - name: Inject API key
         run: |
           python3 -c "
-          key = '${{ secrets.FRED_API_KEY }}'
+          import os
+          key = os.getenv('BUILD_FRED_API_KEY', '')
           content = open('fed_macro_terminal/index.template.html').read()
           content = content.replace('__FRED_API_KEY__', key)
           open('fed_macro_terminal/index.html', 'w').write(content)
