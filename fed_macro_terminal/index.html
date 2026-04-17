@@ -514,14 +514,18 @@ function setLastUpdated(text) {
   [top, bottom, header].forEach(el => {
     if (!el) return;
     el.textContent = formatted;
-    el.style.color = '';
+    el.style.color = 'var(--t-green)';
+    el.style.fontFamily = "'JetBrains Mono','IBM Plex Mono','Courier New',monospace";
   });
 }
 
 function formatLastUpdated(value) {
   if (!value) return new Date().toLocaleString();
-  const dt = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(dt.getTime())) return new Date().toLocaleString();
+  if (value instanceof Date) return value.toLocaleString();
+  const raw = String(value).trim();
+  const normalized = raw.replace(/^\s*(snapshot|updated)\s*:\s*/i, '');
+  const dt = new Date(normalized);
+  if (Number.isNaN(dt.getTime())) return normalized;
   return dt.toLocaleString();
 }
 

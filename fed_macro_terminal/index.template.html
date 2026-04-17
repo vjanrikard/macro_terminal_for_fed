@@ -511,13 +511,23 @@ function setLastUpdated(text) {
   const top = document.getElementById('last-update-top') || document.getElementById('lastUpdate');
   const bottom = document.getElementById('last-updated');
   const header = document.getElementById('header-last-updated');
-  const isSnapshot = typeof text === 'string' && text.toLowerCase().startsWith('snapshot:');
-  const isNoData = typeof text === 'string' && text.toLowerCase() === 'no data available';
+  const formatted = formatLastUpdated(text);
   [top, bottom, header].forEach(el => {
     if (!el) return;
-    el.textContent = text;
-    el.style.color = (isSnapshot || isNoData) ? 'var(--t-green)' : '';
+    el.textContent = formatted;
+    el.style.color = 'var(--t-green)';
+    el.style.fontFamily = "'JetBrains Mono','IBM Plex Mono','Courier New',monospace";
   });
+}
+
+function formatLastUpdated(value) {
+  if (!value) return new Date().toLocaleString();
+  if (value instanceof Date) return value.toLocaleString();
+  const raw = String(value).trim();
+  const normalized = raw.replace(/^\s*(snapshot|updated)\s*:\s*/i, '');
+  const dt = new Date(normalized);
+  if (Number.isNaN(dt.getTime())) return normalized;
+  return dt.toLocaleString();
 }
 
 async function init() {
@@ -557,7 +567,7 @@ async function init() {
       const snapshot_count = Object.values(store).filter(v => v && v.length > 0).length;
       if (snapshot_count > 0) {
         setDataStatus('<span style="color:var(--t-amber)">● snapshot (' + snapshot_count + '/' + fetches.length + ' series)</span>');
-        setLastUpdated('snapshot: ' + new Date(snapshot.generatedAt).toLocaleString());
+        setLastUpdated(snapshot.generatedAt);
         renderTab('overview');
         return;
       }
@@ -569,8 +579,8 @@ async function init() {
 
   setDataStatus('<span style="color:var(--t-green)">● live (' + loaded_count + '/' + fetches.length + ' series)</span>');
   const ts = _snapshotData && _snapshotData.generatedAt
-    ? 'snapshot: ' + new Date(_snapshotData.generatedAt).toLocaleString()
-    : 'updated: ' + new Date().toLocaleTimeString() + ' local';
+    ? _snapshotData.generatedAt
+    : new Date();
   setLastUpdated(ts);
   renderTab('overview');
 }
