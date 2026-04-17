@@ -26,6 +26,7 @@ jobs:
           open('fed_macro_terminal/index.html', 'w').write(content)
           print('Done: fed_macro_terminal/index.html built')
           "
+          sed -i '/^index\.html$/d' fed_macro_terminal/.gitignore
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
