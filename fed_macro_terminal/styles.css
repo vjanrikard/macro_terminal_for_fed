@@ -10,6 +10,8 @@
   --cool: #67d6ff;
   --warn: #ffd166;
   --ok: #70e28f;
+  --t-green: #70e28f;
+  --t-amber: #ffd166;
 }
 
 * {
