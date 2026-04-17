@@ -520,13 +520,21 @@ function setLastUpdated(text) {
 }
 
 function formatLastUpdated(value) {
-  if (!value) return new Date().toLocaleString();
-  if (value instanceof Date) return value.toLocaleString();
+  const formatNo = (d) => d.toLocaleString('nb-NO', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  });
+  if (!value) return formatNo(new Date());
+  if (value instanceof Date) return formatNo(value);
   const raw = String(value).trim();
   const normalized = raw.replace(/^\s*(snapshot|updated)\s*:\s*/i, '');
   const dt = new Date(normalized);
   if (Number.isNaN(dt.getTime())) return normalized;
-  return dt.toLocaleString();
+  return formatNo(dt);
 }
 
 async function init() {
