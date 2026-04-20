@@ -50,6 +50,8 @@ Etter push:
 - `deploy.yml` bygger og deployer `index.html` til `gh-pages`
 - `update-snapshot.yml` kjøres hvert time og oppdaterer snapshotdata
 
+# IMPORTANT READ! https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+
 ### 5. Sjekk GitHub Actions og Pages
 
 1. Gå til repoet → fanen `Actions`
